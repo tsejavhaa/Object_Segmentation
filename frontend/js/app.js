@@ -8,6 +8,7 @@ let ws = null;
 let mediaStream = null;
 let streamActive = false;
 let isSegmenting = false;
+let dialogOpen = false;
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -15,6 +16,7 @@ const $$ = (sel) => document.querySelectorAll(sel);
 const uploadArea = $("#upload-area");
 const uploadContent = $("#upload-content");
 const uploadPreview = $("#upload-preview");
+const uploadLink = $(".upload-link");
 const fileInput = $("#file-input");
 const previewImg = $("#preview-img");
 const previewVideo = $("#preview-video");
@@ -149,15 +151,31 @@ function setupDragDrop() {
     if (files.length) handleFile(files[0]);
   });
 
-  uploadContent.addEventListener("click", () => {
-    if (uploadPreview.classList.contains("hidden")) {
-      fileInput.click();
+  uploadLink.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openFileDialog();
+  });
+
+  uploadContent.addEventListener("click", (e) => {
+    if (e.target === uploadContent || uploadContent.contains(e.target)) {
+      if (uploadPreview.classList.contains("hidden")) {
+        openFileDialog();
+      }
     }
   });
 
   fileInput.addEventListener("change", () => {
+    dialogOpen = false;
     if (fileInput.files.length) handleFile(fileInput.files[0]);
   });
+}
+
+function openFileDialog() {
+  if (dialogOpen) return;
+  dialogOpen = true;
+  fileInput.value = "";
+  fileInput.click();
+  setTimeout(() => { dialogOpen = false; }, 300);
 }
 
 function handleFile(file) {
@@ -175,16 +193,18 @@ function handleFile(file) {
   uploadContent.classList.add("hidden");
   uploadPreview.classList.remove("hidden");
 
+  showBasicMetadata(file);
+
   if (isVideo) {
     previewImg.classList.add("hidden");
     previewVideo.classList.remove("hidden");
+    previewVideo.onloadedmetadata = () => showMediaMetadata(file, previewVideo);
     previewVideo.src = url;
-    previewVideo.onloadedmetadata = () => showMetadata(file, previewVideo);
   } else {
     previewVideo.classList.add("hidden");
     previewImg.classList.remove("hidden");
+    previewImg.onload = () => showMediaMetadata(file, previewImg);
     previewImg.src = url;
-    previewImg.onload = () => showMetadata(file, previewImg);
   }
 
   sourceName.textContent = file.name;
@@ -237,14 +257,26 @@ function showOriginal() {
 
 // ---- Metadata ----
 
-function showMetadata(file, media) {
+function showBasicMetadata(file) {
+  const items = [];
+  items.push({ label: "Name", value: file.name });
+  items.push({ label: "Size", value: formatFileSize(file.size) });
+  items.push({ label: "Type", value: file.type || "unknown" });
+
+  metadataGrid.innerHTML = items.map((i) =>
+    `<div class="metadata-item"><span class="metadata-label">${i.label}</span><span class="metadata-value">${i.value}</span></div>`
+  ).join("");
+  metadataSection.classList.remove("hidden");
+}
+
+function showMediaMetadata(file, media) {
   const items = [];
   items.push({ label: "Name", value: file.name });
   items.push({ label: "Size", value: formatFileSize(file.size) });
 
   if (media.tagName === "IMG") {
     items.push({ label: "Dimensions", value: `${media.naturalWidth} × ${media.naturalHeight} px` });
-    items.push({ label: "Megapixels", value: ((media.naturalWidth * media.naturalHeight) / 1e6).toFixed(2) });
+    items.push({ label: "Megapixels", value: ((media.naturalWidth * media.naturalHeight) / 1e6).toFixed(2) + " MP" });
   } else if (media.tagName === "VIDEO") {
     items.push({ label: "Dimensions", value: `${media.videoWidth} × ${media.videoHeight} px` });
     items.push({ label: "Duration", value: formatDuration(media.duration) });
@@ -268,6 +300,7 @@ function formatFileSize(bytes) {
 }
 
 function formatDuration(seconds) {
+  if (!seconds || !isFinite(seconds)) return "0:00";
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
@@ -275,14 +308,63 @@ function formatDuration(seconds) {
 
 // ---- Segmentation ----
 
+let _progressTimer = null;
+let _progressValue = 0;
+
+function startProgress() {
+  _progressValue = 0;
+  setProgressFill(0);
+  progressBar.classList.remove("hidden");
+  tickProgress();
+}
+
+function tickProgress() {
+  if (_progressValue >= 90) return;
+  const remaining = 90 - _progressValue;
+  const increment = Math.max(0.3, remaining * 0.04);
+  _progressValue = Math.min(90, _progressValue + increment);
+  setProgressFill(_progressValue);
+  _progressTimer = setTimeout(tickProgress, 120);
+}
+
+function setProgressFill(value) {
+  const fill = document.getElementById("progress-fill");
+  const text = document.getElementById("progress-text");
+  if (fill) fill.style.width = `${value}%`;
+  if (text) text.textContent = `${Math.round(value)}%`;
+}
+
+function completeProgress() {
+  if (_progressTimer) {
+    clearTimeout(_progressTimer);
+    _progressTimer = null;
+  }
+  _progressValue = 100;
+  setProgressFill(100);
+  setTimeout(() => {
+    progressBar.classList.add("hidden");
+    setProgressFill(0);
+  }, 500);
+}
+
 async function runSegmentation() {
-  if (!currentFilePath || isSegmenting) return;
+  if (!currentFilePath) {
+    console.warn("No file path to segment");
+    return;
+  }
+  if (isSegmenting) return;
 
   isSegmenting = true;
   btnSegment.disabled = true;
   btnSegment.textContent = "Segmenting";
-  progressBar.classList.remove("hidden");
-  progressText.textContent = "Segmenting...";
+
+  segmentedView.classList.add("hidden");
+  segmentedVideoView.classList.add("hidden");
+  segmentedView.src = "";
+  segmentedVideoView.src = "";
+  viewerStats.classList.add("hidden");
+
+  startProgress();
 
   const fd = new FormData();
   fd.append("file_path", currentFilePath);
@@ -295,14 +377,21 @@ async function runSegmentation() {
 
   try {
     const res = await fetch(endpoint, { method: "POST", body: fd });
+
+    if (!res.ok) {
+      const text = await res.text();
+      if (text.startsWith("{")) {
+        const err = JSON.parse(text);
+        throw new Error(err.detail || err.error || `Server error (${res.status})`);
+      }
+      throw new Error(`Server error (${res.status})`);
+    }
+
     const data = await res.json();
 
     if (data.error) {
       alert(data.error);
-      isSegmenting = false;
-      btnSegment.disabled = false;
-      btnSegment.textContent = "Segment";
-      progressBar.classList.add("hidden");
+      finishSegmentation();
       return;
     }
 
@@ -315,44 +404,28 @@ async function runSegmentation() {
       segmentedVideoView.src = data.video_url;
       segmentedPane.querySelector(".viewer-placeholder").classList.add("hidden");
       statsMasks.textContent = `Frames: ${data.frames_processed || 0}`;
-      addHistoryItem({
-        file_name: currentFileName,
-        model_name: modelSelect.value,
-        mask_count: data.frames_processed || 0,
-        computation_time: parseFloat(elapsed),
-        timestamp: new Date().toISOString(),
-        original_url: currentFileUrl,
-        overlay_url: data.video_url,
-        is_video: true,
-      });
     } else {
       segmentedView.classList.remove("hidden");
       segmentedVideoView.classList.add("hidden");
       segmentedView.src = data.overlay_url;
       segmentedPane.querySelector(".viewer-placeholder").classList.add("hidden");
       statsMasks.textContent = `Masks: ${data.num_masks || 0}`;
-      addHistoryItem({
-        file_name: currentFileName,
-        model_name: data.model_name,
-        mask_count: data.num_masks || 0,
-        computation_time: data.computation_time || parseFloat(elapsed),
-        timestamp: new Date().toISOString(),
-        original_url: currentFileUrl,
-        overlay_url: data.overlay_url,
-        mask_url: data.mask_url,
-        is_video: false,
-      });
     }
 
     viewerStats.classList.remove("hidden");
+    loadHistory();
   } catch (e) {
-    alert("Segmentation failed");
+    alert("Segmentation failed: " + e.message);
   }
 
+  finishSegmentation();
+}
+
+function finishSegmentation() {
   isSegmenting = false;
   btnSegment.disabled = false;
   btnSegment.textContent = "Segment";
-  progressBar.classList.add("hidden");
+  completeProgress();
 }
 
 // ---- Stream ----
@@ -444,8 +517,7 @@ async function loadHistory() {
   try {
     const res = await fetch(`${API_BASE}/history`);
     const data = await res.json();
-    const tasks = data.tasks || [];
-    renderHistory(tasks);
+    renderHistory(data.tasks || []);
   } catch (e) {
     console.error("Failed to load history", e);
   }
@@ -453,13 +525,13 @@ async function loadHistory() {
 
 function renderHistory(tasks) {
   historyList.innerHTML = "";
-  const visible = !historyList.classList.contains("hidden");
+  const wasHidden = historyList.classList.contains("hidden");
   historyList.classList.remove("hidden");
 
   if (tasks.length === 0) {
     historyList.innerHTML = '<div class="history-empty">No tasks yet</div>';
     historyCount.textContent = "0";
-    if (!visible) historyList.classList.add("hidden");
+    if (wasHidden) historyList.classList.add("hidden");
     return;
   }
 
@@ -468,12 +540,11 @@ function renderHistory(tasks) {
   tasks.forEach((t) => {
     const item = document.createElement("div");
     item.className = "history-item";
-    item.dataset.taskId = t.task_id;
 
     const isVideo = t.mask_url === null || t.mask_url === undefined;
     const overlaySrc = t.overlay_url || "";
     const originalSrc = t.original_url || "";
-    const date = t.timestamp ? new Date(t.timestamp).toLocaleString() : "";
+    const date = t.timestamp ? formatDate(t.timestamp) : "";
 
     item.innerHTML = `
       <div class="history-thumbs">
@@ -497,11 +568,15 @@ function renderHistory(tasks) {
     historyList.appendChild(item);
   });
 
-  if (!visible) historyList.classList.add("hidden");
+  if (wasHidden) historyList.classList.add("hidden");
 }
 
-function addHistoryItem(data) {
-  loadHistory();
+function formatDate(iso) {
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
 }
 
 function restoreHistoryItem(task) {
@@ -539,7 +614,6 @@ function restoreHistoryItem(task) {
 
   viewerStats.classList.remove("hidden");
   statsTime.textContent = `Time: ${task.computation_time || "?"}s`;
-
   sourceName.textContent = task.file_name || "";
 }
 
@@ -550,6 +624,8 @@ function resetUpload() {
   uploadPreview.classList.add("hidden");
   previewImg.src = "";
   previewVideo.src = "";
+  previewImg.onload = null;
+  previewVideo.onloadedmetadata = null;
   fileInput.value = "";
   currentFilePath = null;
   currentFileUrl = null;
@@ -558,6 +634,7 @@ function resetUpload() {
   btnSegment.disabled = false;
   btnSegment.textContent = "Segment";
   clearMetadata();
+  progressBar.classList.add("hidden");
 }
 
 function resetViewer() {

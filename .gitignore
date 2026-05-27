@@ -27,3 +27,6 @@ venv/
 # File
 .env
 backend/models/.cache/
+uploads/images/
+uploads/results/
+uploads/videos/

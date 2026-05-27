@@ -2,6 +2,8 @@
 
 A web-based object segmentation app using multiple state-of-the-art models via HuggingFace `transformers` pipelines. Supports **image**, **video**, and **live webcam** segmentation through a clean browser interface.
 
+![](interview_ai.gif)
+
 ## Tech Stack
 
 - **Backend:** FastAPI (Python) with Uvicorn

@@ -284,15 +284,10 @@ html, body {
 
 .progress-fill {
   height: 100%;
-  width: 30%;
-  background: var(--accent);
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), #6ba3ff);
   border-radius: 2px;
-  animation: progress-slide 1.2s ease-in-out infinite;
-}
-
-@keyframes progress-slide {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(400%); }
+  transition: width 0.3s ease;
 }
 
 .progress-text {
