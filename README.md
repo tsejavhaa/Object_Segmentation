@@ -2,7 +2,7 @@
 
 A web-based object segmentation app using multiple state-of-the-art models via HuggingFace `transformers` pipelines. Supports **image**, **video**, and **live webcam** segmentation through a clean browser interface.
 
-![](interview_ai.gif)
+![](/test/screen.png)
 
 ## Tech Stack
 
@@ -36,6 +36,17 @@ uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Open http://localhost:8000 in your browser. The frontend is served automatically at the root URL.
+
+## Features
+
+- **Source tabs** — switch between Image, Video, and Live Stream modes
+- **Drag & drop upload** — supports images and videos
+- **File info** — shows file name, size, dimensions (W×H, MP), and video duration after upload
+- **Progress indicator** — percentage-based progress bar during segmentation
+- **Side-by-side viewer** — compares original and segmented results
+- **Model selector** — switch segmentation models at runtime via dropdown
+- **Task history** — collapsible panel stores previous tasks with thumbnails, metadata, and click-to-restore
+- **Live webcam stream** — real-time segmentation via WebSocket
 
 ## Project Structure
 
@@ -167,8 +178,14 @@ GET /api/history
       "mask_count": 8,
       "computation_time": 2.345,
       "status": "success",
-      "overlay_url": "/uploads/results/...",
-      "mask_url": "/uploads/results/..."
+      "overlay_url": "/uploads/results/<id>_overlay.png",
+      "mask_url": "/uploads/results/<id>_mask.png",
+      "original_url": "/uploads/images/<file>",
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "file_size": 245760
+      }
     }
   ]
 }
