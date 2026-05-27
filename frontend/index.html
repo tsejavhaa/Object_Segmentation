@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Object Segmentation</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>Object Segmentation</h1>
+      <div class="model-selector">
+        <label for="model-select">Model:</label>
+        <select id="model-select"></select>
+        <span id="model-status" class="status-badge loading">loading...</span>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <aside class="panel panel-left">
+        <div class="source-tabs">
+          <button class="tab active" data-source="image">Image</button>
+          <button class="tab" data-source="video">Video</button>
+          <button class="tab" data-source="stream">Live Stream</button>
+        </div>
+
+        <div class="upload-area" id="upload-area">
+          <div class="upload-content" id="upload-content">
+            <div class="upload-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+              </svg>
+            </div>
+            <p class="upload-text">Drag & drop or <span class="upload-link">browse</span></p>
+            <p class="upload-hint">Supports PNG, JPG, MP4, AVI, MOV</p>
+            <input type="file" id="file-input" accept="image/*,video/*" hidden />
+          </div>
+          <div class="upload-preview hidden" id="upload-preview">
+            <img id="preview-img" class="preview-media hidden" />
+            <video id="preview-video" class="preview-media hidden" controls></video>
+            <div class="upload-actions">
+              <button class="btn btn-primary" id="btn-segment">Segment</button>
+              <button class="btn btn-outline" id="btn-change">Change</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="progress-bar hidden" id="progress-bar">
+          <div class="progress-track">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+          <span class="progress-text" id="progress-text">Segmenting...</span>
+        </div>
+
+        <div class="metadata-section hidden" id="metadata-section">
+          <div class="section-title">File Info</div>
+          <div class="metadata-grid" id="metadata-grid"></div>
+        </div>
+
+        <div class="stream-controls hidden" id="stream-controls">
+          <video id="webcam-feed" autoplay playsinline></video>
+          <div class="stream-actions">
+            <button class="btn btn-primary" id="btn-start-stream">Start Stream</button>
+            <button class="btn btn-danger hidden" id="btn-stop-stream">Stop</button>
+          </div>
+        </div>
+
+        <div class="source-info" id="source-info">
+          <span id="source-name"></span>
+        </div>
+
+        <div class="history-section" id="history-section">
+          <button class="history-toggle" id="history-toggle">
+            <span>History</span>
+            <span class="history-count" id="history-count">0</span>
+          </button>
+          <div class="history-list hidden" id="history-list"></div>
+        </div>
+      </aside>
+
+      <section class="panel panel-right">
+        <div class="viewer-header">
+          <span class="viewer-label">Original</span>
+          <span class="viewer-label">Segmented</span>
+        </div>
+        <div class="viewer-container">
+          <div class="viewer-pane" id="original-pane">
+            <div class="viewer-placeholder">
+              <p>Upload or capture media to begin</p>
+            </div>
+            <img id="original-view" class="viewer-image hidden" />
+            <video id="original-video-view" class="viewer-image hidden" controls></video>
+          </div>
+          <div class="viewer-divider"></div>
+          <div class="viewer-pane" id="segmented-pane">
+            <div class="viewer-placeholder">
+              <p>Segmented output will appear here</p>
+            </div>
+            <img id="segmented-view" class="viewer-image hidden" />
+            <video id="segmented-video-view" class="viewer-image hidden" controls></video>
+          </div>
+        </div>
+        <div class="viewer-stats hidden" id="viewer-stats">
+          <span id="stats-masks">Masks: 0</span>
+          <span id="stats-time">Time: --</span>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
